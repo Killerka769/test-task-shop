@@ -3,7 +3,7 @@ import axios from "axios";
 import { TProducts } from "../Types/Types";
 
 const fetchProducts = async ({ pageParam = 1 }: QueryFunctionContext) => {
-  const response = await axios.get(`http://o-complex.com:1337/products?page=${pageParam}&page_size=20`);
+  const response = await axios.get(`/api/products?page=${pageParam}&page_size=20`);
   return response.data as TProducts;
 };
 
