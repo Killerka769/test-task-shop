@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import useGetProducts from './Hooks/useGetProducts';
 import useGetReviews from './Hooks/useGetReviews';
 import './styles/styles.scss';
-import { TProductItem, TReviews } from './Types/Types';
+import { TBasketItem, TProductItem, TReviews } from './Types/Types';
 import useBasketStore from './Store/Store';
 import 'react-phone-input-2/lib/style.css';
 import PhoneInput from 'react-phone-input-2';
@@ -11,8 +11,13 @@ import usePostProducts from './Hooks/usePostProducts';
 import DOMPurify from 'dompurify';
 import Loader from './components/Loader';
 
+
 export default function Home() {
-  const { dataReviews, loadingReviews, errorReviews } = useGetReviews();
+  const { dataReviews, loadingReviews, errorReviews } = useGetReviews() as {
+    dataReviews?: TReviews[];
+    loadingReviews: boolean;
+    errorReviews: boolean;
+  };
 
   const [phone, setPhone] = useState('');
   const [phoneError, setPhoneError] = useState('');
@@ -31,7 +36,6 @@ export default function Home() {
 
   const basket = useBasketStore(e=>e.basket);
   const addItem = useBasketStore(e=>e.addItem);
-  const deleteItem =useBasketStore(e=>e.deleteItem);
   const incrementItem = useBasketStore(e=>e.incrementItem);
   const decrementItem = useBasketStore(e=>e.decrementItem);
 
@@ -40,18 +44,20 @@ export default function Home() {
   const totalSum = basket.reduce((sum, item) => sum + item.price * item.count, 0);
 
   useEffect(() => {
+    const currentRef = loaderRef.current;
     const observer = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
         fetchNextPage();
       }
     });
 
-    if (loaderRef.current) observer.observe(loaderRef.current);
+    if (currentRef) observer.observe(currentRef);
 
     return () => {
-      if (loaderRef.current) observer.unobserve(loaderRef.current);
+      if (currentRef) observer.unobserve(currentRef);
     };
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
 
   useEffect(() => {
     if (isSuccessPostProduct) {
@@ -65,12 +71,14 @@ export default function Home() {
   if (errorReviews) return <h1>Ошибка загрузки отзывов</h1>;
   if (errorProducts) return <h1>Ошибка загрузки продуктов</h1>;
 
-  function add( e ){
-    const el = {
+  function add( e : TBasketItem | (TProductItem & { count?: number }) ){
+    const el : TBasketItem = {
       id: e.id,
       title: e.title,
       count: e.count || 1,
       price: e.price,
+      description: e.description,
+      image_url: e.image_url,
     }
     addItem(el);
   }
@@ -93,7 +101,7 @@ export default function Home() {
       </div>
 
       <div className='mainForm'>
-        <form onSubmit={(e) => e.preventDefault()}>
+        <form onSubmit={(e: React.FormEvent<HTMLFormElement>) => e.preventDefault()}>
           <h1>Добавленные товары</h1>
 
           {basket.map(el => (

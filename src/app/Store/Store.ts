@@ -10,6 +10,7 @@ type TBasketStore = {
   deleteItem: (id: number) => void;
   incrementItem: (id: number) => void;
   decrementItem: (id: number) => void;
+  updateItemCount: (id: number, count: number) => void;
 };
 
 const useBasketStore = create<TBasketStore>()(
@@ -47,7 +48,7 @@ const useBasketStore = create<TBasketStore>()(
             .filter((item) => item.count > 0),
         })),
 
-      updateItemCount: (id, count) =>
+      updateItemCount: (id : number, count : number) =>
         set((state) => ({
           basket: state.basket.map((item) =>
             item.id === id ? { ...item, count } : item
