@@ -1,95 +1,169 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client'
+import { useEffect, useRef, useState } from 'react';
+import useGetProducts from './Hooks/useGetProducts';
+import useGetReviews from './Hooks/useGetReviews';
+import './styles/styles.scss';
+import { TProductItem, TReviews } from './Types/Types';
+import useBasketStore from './Store/Store';
+import 'react-phone-input-2/lib/style.css';
+import PhoneInput from 'react-phone-input-2';
+import usePostProducts from './Hooks/usePostProducts';
+import DOMPurify from 'dompurify';
+import Loader from './components/Loader';
 
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>src/app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const { dataReviews, loadingReviews, errorReviews } = useGetReviews();
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [showPopup, setShowPopup] = useState(false);
+
+  const {
+    dataProducts,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    loadingProducts,
+    errorProducts,
+  } = useGetProducts();
+
+  const { mutatePostProduct, isPendingPostProduct, isErrorPostProduct, isSuccessPostProduct } = usePostProducts();
+
+  const basket = useBasketStore(e=>e.basket);
+  const addItem = useBasketStore(e=>e.addItem);
+  const deleteItem =useBasketStore(e=>e.deleteItem);
+  const incrementItem = useBasketStore(e=>e.incrementItem);
+  const decrementItem = useBasketStore(e=>e.decrementItem);
+
+  const loaderRef = useRef(null);
+
+  const totalSum = basket.reduce((sum, item) => sum + item.price * item.count, 0);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+    });
+
+    if (loaderRef.current) observer.observe(loaderRef.current);
+
+    return () => {
+      if (loaderRef.current) observer.unobserve(loaderRef.current);
+    };
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  useEffect(() => {
+    if (isSuccessPostProduct) {
+      setShowPopup(true);
+      setTimeout(() => setShowPopup(false), 3000); // скрыть через 3 секунды
+    }
+  }, [isSuccessPostProduct]);
+
+
+  if (loadingReviews || loadingProducts) return <Loader />;
+  if (errorReviews) return <h1>Ошибка загрузки отзывов</h1>;
+  if (errorProducts) return <h1>Ошибка загрузки продуктов</h1>;
+
+  function add( e ){
+    const el = {
+      id: e.id,
+      title: e.title,
+      count: e.count || 1,
+      price: e.price,
+    }
+    addItem(el);
+  }
+
+  return (
+    <div className='mainDiv'>
+      <div className='testText'>
+        <h1>тестовое задание</h1>
+      </div>
+
+      <h1>Отзывы:</h1>
+      <div className='containerReviews'>
+        {dataReviews?.map((review: TReviews) => (
+            <div
+              className='reviews'
+              key={review.id}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(review.text) }}
             />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+        ))}
+      </div>
+
+      <div className='mainForm'>
+        <form onSubmit={(e) => e.preventDefault()}>
+          <h1>Добавленные товары</h1>
+
+          {basket.map(el => (
+            <div key={el.id}>
+              {el.title} x{el.count} — {el.price * el.count} ₽
+            </div>
+          ))}
+          {totalSum > 0 && (<h3>Итого: {totalSum}</h3>)}
+          <label>Телефон:</label>
+            <PhoneInput
+              country={'ru'}
+              value={phone}
+              onChange={setPhone}
+              inputStyle={{ width: '300px', height: '50px', fontSize: '26px' }}
+            />
+          <button type="submit" disabled={basket.length === 0} onClick={()=>{
+              if (!phone.trim()) {
+                setPhoneError('Пожалуйста, введите номер телефона');
+                return;
+              }
+            mutatePostProduct({
+            phone: phone.trim(),
+            cart: basket.map(item => ({
+                id: item.id,
+                quantity: item.count, // переименование count → quantity
+              })),
+          })}}>
+            {isPendingPostProduct ? ('Отправка...') : ('Отправить заказ')} 
+          </button>
+          {phoneError && <div style={{ color: 'red', fontSize: '14px', marginTop: '5px' }}>{phoneError}</div>}
+          {showPopup && (
+            <div className='containerSuccess'>
+              <div className='success'>
+                Спасибо за заказ! 💌
+              </div>
+            </div>
+          )}
+          {isErrorPostProduct && (<h1>Что-то пошло не так..</h1>)}
+        </form>
+      </div>
+
+
+      <div className='containerProducts'>
+        <div className='cards'>
+          {dataProducts?.pages.map((page) =>
+            page.items.map((el: TProductItem) => { 
+              const inBasket = basket.find(item => item.id === el.id);
+              return(<div className='product' key={el.id}>
+                <img src={el.image_url} alt={el.title} width={300} />
+                <h2>{el.title}</h2>
+                <p>{el.description}</p>
+                <p>Цена: {el.price} ₽</p>
+                  {inBasket ? (
+                    <div>
+                      <button onClick={() => decrementItem(el.id)}>-</button>
+                      <span>{inBasket.count}</span>
+                      <button onClick={() => incrementItem(el.id)}>+</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => add(el)}>Купить</button>
+                  )}
+              </div>)
+              })
+          )}
         </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {isFetchingNextPage && <p>Загрузка ещё...</p>}
+        <div ref={loaderRef} style={{ height: 20 }}></div>
+        {!hasNextPage && <p>Все товары загружены</p>}
+      </div>
     </div>
   );
 }
